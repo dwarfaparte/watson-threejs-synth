@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>3D Hex Grid</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			/* Remove all margin and overflow */
+			body {
+				margin: 0;
+				overflow: hidden;
+			}
+			/* Canvas should fill the screen */
+			canvas {
+				display: block;
+			}
+		</style>
+	</head>
+	<body>
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js",
+					"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/"
+				}
+			}
+		</script>
+
+		<script type="module" src="main.js"></script>
+
+	</body>
+</html>
