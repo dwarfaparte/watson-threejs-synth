@@ -14,7 +14,7 @@ const PULSE_SPEED = 2; // Controls the speed of the pulse
 
 // --- FADE-IN & ZOOM-IN VARIABLES ---
 let modelToFadeIn; // Will store the loaded GLTF scene
-const FADE_SPEED = 0.002; // How fast the model fades in (per frame)
+const FADE_SPEED = 0.0025; // How fast the model fades in (per frame)
 let isFadingIn = false;
 
 // Zoom-in variables
