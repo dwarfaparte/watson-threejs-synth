@@ -386,7 +386,7 @@ async function startExperience() {
         await document.documentElement.requestFullscreen();
 
         // 2. Lock Orientation (only attempt on mobile)
-        if (isMobile && screen.orientation && screen.orientation.lock) {
+        if (isMobile /*&& screen.orientation && screen.orientation.lock*/) {
             await screen.orientation.lock("landscape");
         }
 
