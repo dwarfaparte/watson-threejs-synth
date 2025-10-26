@@ -14,10 +14,60 @@
 			canvas {
 				display: block;
 			}
+
+			/* --- Tooltip CSS --- */
+			#tooltip {
+				position: absolute; /* Crucial for following the mouse */
+				opacity: 0;
+				visibility: hidden;
+				transition: opacity 0.3 ease;
+				padding: 8px 12px;
+				background-color: rgba(0, 0, 0, 0.75); /* Semi-transparent black */
+				color: rgb(255, 255, 255);    /* Matching your neon outline color */
+				border: 0px solid #48f9ffff;
+				border-radius: 4px;
+				font-family: 'Arial', sans-serif;
+				font-size: 24px;
+				
+				/* Prevents the tooltip itself from being raycasted */
+				pointer-events: none; 
+				
+				/* Ensures it renders on top of the canvas */
+				z-index: 100;
+			}
+			#start-overlay {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100vw;
+				height: 100vh;
+				background-color: rgba(0, 0, 0, 0.9);
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				z-index: 1000;
+				color: white;
+			}
+
+			#start-button {
+				padding: 15px 30px;
+				font-size: 1.5em;
+				font-family: Arial, sans-serif;
+				color: white;
+				background-color: #333;
+				border: 2px solid #48f9ffff;
+				border-radius: 8px;
+				cursor: pointer;
+			}
+			
 		</style>
 	</head>
 	<body>
 
+		<div id="tooltip"></div>
+		<div id="start-overlay">
+			<button id="start-button">View</button>
+		</div>
 		<script type="importmap">
 			{
 				"imports": {
