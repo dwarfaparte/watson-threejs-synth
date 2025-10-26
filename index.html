@@ -1,11 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<title>Untitled Synth</title>
+		<title>Untitled Synth</title> 
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 		<style>
-			/* ... your CSS styles ... */
+			/* Remove all margin and overflow */
+			body {
+				margin: 0;
+				overflow: hidden;
+			}
+			/* Canvas should fill the screen */
+			canvas {
+				display: block;
+			}
+
+			/* --- Tooltip CSS --- */
+			#description-display {
+				position: fixed; /* Sticks to the viewport */
+				top: 20px;
+				right: 20px;
+				width: 350px; /* Or any width you prefer */
+				padding: 30px 30px;
+				background-color: rgba(0, 0, 0, 0.75);
+				color: #48f9ffff;
+				border: 1px solid #48f9ffff;
+				border-radius: 4px;
+				font-family: Arial, sans-serif;
+				font-size: 34px;
+				pointer-events: none; 
+				z-index: 100;
+				
+				/* --- NEW LINES FOR "POP" EFFECT --- */
+				transform: scale(1);
+				transition: transform 0.2s ease-out;
+			}
+			#start-overlay {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100vw;
+				height: 100vh;
+				background-color: rgba(0, 0, 0, 0.9);
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				z-index: 1000;
+				color: white;
+			}
+
+			#start-button {
+				padding: 15px 30px;
+				font-size: 1.5em;
+				font-family: Arial, sans-serif;
+				color: white;
+				background-color: #333;
+				border: 2px solid #48f9ffff;
+				border-radius: 8px;
+				cursor: pointer;
+			}
 		</style>
 	</head>
 	<body>
