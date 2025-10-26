@@ -15,10 +15,11 @@ let intersectedObject = null; // To track the currently highlighted object
 let outlinePass; // Declare globally so it can be accessed in animate() and resize handler
 // --- END RAYCASTING & OUTLINE VARIABLES ---
 
-// --- NEW: TOOLTIP & DATA VARIABLES ---
-let tooltipElement; // Will hold the HTML <div>
+// --- MODIFIED: DISPLAY & DATA VARIABLES ---
+let descriptionDisplayElement; // Will hold the HTML <div>
+let currentDescriptionText = ""; // To track the currently displayed text
 let knobDescriptions = new Map(); // To store 'Knob.001' -> 'This is knob one.'
-// --- END NEW ---
+// --- END MODIFIED ---
 
 // --- NEW: CSV DATA LOADING ---
 async function loadKnobData() {
@@ -79,7 +80,7 @@ let currentRadius = INITIAL_RADIUS;
 // 1. Setup the Scene, Camera, and Renderer
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(20, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antiaslias: true });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -217,14 +218,7 @@ function onMouseMove(event) {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     
-    // --- NEW: Update Tooltip Position ---
-    // Update the tooltip's position to follow the mouse cursor
-    // Add a small offset (e.g., 10px) so the cursor isn't on top of it
-    if (tooltipElement) {
-        tooltipElement.style.left = (event.clientX + 10) + 'px';
-        tooltipElement.style.top = (event.clientY + 10) + 'px';
-    }
-    // --- END NEW ---
+    // --- REMOVED Tooltip Position Update ---
 }
 window.addEventListener('mousemove', onMouseMove, false);
 // ----------------------------------------------
@@ -238,11 +232,7 @@ function onTouchStart(event) {
         mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
         
-        // Update the tooltip position
-        if (tooltipElement) {
-            tooltipElement.style.left = (touch.clientX + 10) + 'px';
-            tooltipElement.style.top = (touch.clientY + 10) + 'px';
-        }
+        // --- REMOVED Tooltip Position Update ---
     }
 }
 
@@ -254,19 +244,13 @@ function onTouchMove(event) {
         mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
         
-        // Update tooltip position
-        if (tooltipElement) {
-            tooltipElement.style.left = (touch.clientX + 10) + 'px';
-            tooltipElement.style.top = (touch.clientY + 10) + 'px';
-        }
+        // --- REMOVED Tooltip Position Update ---
+
     } else {
         // If more than one finger (e.g., pinch-zoom), hide the tooltip
         mouse.x = -Infinity; // Move raycaster off-screen
         mouse.y = -Infinity;
-        if (tooltipElement) {
-            tooltipElement.style.opacity = '0';
-            tooltipElement.style.visibility = 'hidden';
-        }
+        // --- REMOVED Tooltip Hide Logic ---
     }
 }
 
@@ -274,10 +258,7 @@ function onTouchEnd(event) {
     // When the last finger is lifted, hide the tooltip
     mouse.x = -Infinity; // Move raycaster off-screen
     mouse.y = -Infinity;
-    if (tooltipElement) {
-        tooltipElement.style.opacity = '0';
-        tooltipElement.style.visibility = 'hidden';
-    }
+    // --- REMOVED Tooltip Hide Logic ---
 }
 
 // Add the new listeners
@@ -286,7 +267,7 @@ window.addEventListener('touchmove', onTouchMove, false);
 window.addEventListener('touchend', onTouchEnd, false);
 // --- END NEW ---
 
-// --- MODIFIED: Raycasting Logic for Outlining & Tooltip ---
+// --- MODIFIED: Raycasting Logic for Outlining & Display ---
 function checkIntersections() {
     // 1. Raycast from camera through the mouse position
     raycaster.setFromCamera(mouse, camera);
@@ -300,12 +281,8 @@ function checkIntersections() {
         intersectedObject = null;
     }
 
-    // --- NEW: Hide tooltip by default each frame ---
-    // It will be re-shown if a new knob is found
-if (tooltipElement) {
-        tooltipElement.style.opacity = '0';
-        tooltipElement.style.visibility = 'hidden';
-    }
+    // --- REMOVED per-frame hide logic ---
+
     // 3. Check for new intersection and filter for objects containing "Knob" in their name
     if (intersects.length > 0) {
         // The intersected object might be a sub-mesh. Traverse up to find the parent object named 'Knob'.
@@ -321,20 +298,29 @@ if (tooltipElement) {
                 
                 const objectName = intersectedObject.name;
                 const description = knobDescriptions.get(objectName);
-                console.log(`Hovering over: [${objectName}], Description found: [${description}]`);
+                
+                // --- MODIFIED: Update Display Logic ---
+                // Check if we found a description AND it's different from the one currently shown
+               // Check if we found a description AND it's different from the one currently shown
+                if (description && description !== currentDescriptionText) {
+                    if (descriptionDisplayElement) {
+                        
+                        // 1. Set the new text and update the tracker
+                        descriptionDisplayElement.innerHTML = description;
+                        currentDescriptionText = description; 
 
-                // --- NEW: Show Tooltip ---
-                if (tooltipElement) {
-                    // Look up the description from our loaded data
-                    const description = knobDescriptions.get(intersectedObject.name);
-                    
-                if (description) {
-                        tooltipElement.innerHTML = description;
-                        tooltipElement.style.opacity = '1';
-                        tooltipElement.style.visibility = 'visible';
+                        // 2. Apply the "pop" effect
+                        descriptionDisplayElement.style.transform = 'scale(1.2)'; // Enlarge
+
+                        // 3. Set a timeout to return to normal size
+                        setTimeout(() => {
+                            if (descriptionDisplayElement) {
+                                descriptionDisplayElement.style.transform = 'scale(1)'; // Shrink back
+                            }
+                        }, 70); // 150ms = 0.15s, you can adjust this time
                     }
                 }
-                // --- END NEW ---
+                // --- END MODIFIED ---
                 
                 break; // Stop climbing once the named knob is found
             }
@@ -426,8 +412,8 @@ function animate() {
     composer.render();
 }
 
-// --- NEW: Get Tooltip Element from DOM ---
-tooltipElement = document.getElementById('tooltip');
+// --- MODIFIED: Get Display Element from DOM ---
+descriptionDisplayElement = document.getElementById('description-display');
 
 // --- NEW: Fullscreen & Landscape Lock Logic ---
 const startOverlay = document.getElementById('start-overlay');
