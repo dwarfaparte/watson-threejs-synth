@@ -73,7 +73,7 @@ let isFadingIn = false;
 const INITIAL_RADIUS = 70;
 const FINAL_RADIUS = 40; 
 // --- NEW: Zoom limits (were in MapControls) ---
-const MIN_ZOOM_RADIUS = 40;
+const MIN_ZOOM_RADIUS = 10;
 const MAX_ZOOM_RADIUS = 70;
 // --- END NEW ---
 const EASE_FACTOR = 0.02; 
@@ -87,6 +87,7 @@ const camera = new THREE.PerspectiveCamera(20, window.innerWidth / window.innerH
 const renderer = new THREE.WebGLRenderer({ antiaslias: true });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 document.body.appendChild(renderer.domElement);
 
 // --- BACKGROUND TEXTURE LOADING ---
