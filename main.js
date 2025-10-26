@@ -229,6 +229,63 @@ function onMouseMove(event) {
 window.addEventListener('mousemove', onMouseMove, false);
 // ----------------------------------------------
 
+// --- NEW: Mobile Touch Handlers for Tooltip ---
+function onTouchStart(event) {
+    if (event.touches.length === 1) { // Only for single touch
+        const touch = event.touches[0];
+        
+        // Update the 'mouse' vector for raycasting
+        mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+        
+        // Update the tooltip position
+        if (tooltipElement) {
+            tooltipElement.style.left = (touch.clientX + 10) + 'px';
+            tooltipElement.style.top = (touch.clientY + 10) + 'px';
+        }
+    }
+}
+
+function onTouchMove(event) {
+    if (event.touches.length === 1) { // Only for single touch
+        const touch = event.touches[0];
+        
+        // Update 'mouse' vector
+        mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+        
+        // Update tooltip position
+        if (tooltipElement) {
+            tooltipElement.style.left = (touch.clientX + 10) + 'px';
+            tooltipElement.style.top = (touch.clientY + 10) + 'px';
+        }
+    } else {
+        // If more than one finger (e.g., pinch-zoom), hide the tooltip
+        mouse.x = -Infinity; // Move raycaster off-screen
+        mouse.y = -Infinity;
+        if (tooltipElement) {
+            tooltipElement.style.opacity = '0';
+            tooltipElement.style.visibility = 'hidden';
+        }
+    }
+}
+
+function onTouchEnd(event) {
+    // When the last finger is lifted, hide the tooltip
+    mouse.x = -Infinity; // Move raycaster off-screen
+    mouse.y = -Infinity;
+    if (tooltipElement) {
+        tooltipElement.style.opacity = '0';
+        tooltipElement.style.visibility = 'hidden';
+    }
+}
+
+// Add the new listeners
+window.addEventListener('touchstart', onTouchStart, false);
+window.addEventListener('touchmove', onTouchMove, false);
+window.addEventListener('touchend', onTouchEnd, false);
+// --- END NEW ---
+
 // --- MODIFIED: Raycasting Logic for Outlining & Tooltip ---
 function checkIntersections() {
     // 1. Raycast from camera through the mouse position
