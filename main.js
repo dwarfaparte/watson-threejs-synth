@@ -5,16 +5,14 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { FilmPass } from 'three/addons/postprocessing/FilmPass.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
-;
 
 // --- RAYCASTING & OUTLINE VARIABLES ---
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 let selectedObject = null; // <-- RENAMED
 let outlinePass;
-// --- END RAYCASTING & OUTLINE VARIABLES ---
 
-// --- NEW: DRAG & ROTATION VARIABLES ---
+// --- DRAG & ROTATION VARIABLES ---
 let isDragging = false;
 const previousMousePosition = {
     x: 0,
@@ -24,23 +22,17 @@ const previousMousePosition = {
     const INERTIA_DAMPING = 0.97; // <-- ADD: Friction (0.9 = fast stop, 0.99 = long drift)
     const DRAG_SENSITIVITY = 0.005; // <-- ADD: Your existing sensitivity as a constant
 
-// --- END NEW ---
-
-// --- MODIFIED: DISPLAY & DATA VARIABLES ---
+// --- DISPLAY & DATA VARIABLES ---
 let descriptionDisplayElement; 
 let currentDescriptionText = ""; 
 let knobDescriptions = new Map();
-// --- END MODIFIED ---
 
 // --- NEW: GUI DISPLAY CANVAS VARIABLES ---
 let displayCanvas01 = null; // Will store the <canvas> for Display01
 let displayCanvas02 = null; // Will store the <canvas> for Display02
 let guiDisplayHost = null;  // The HTML div that will hold the canvas
-// --- DELETED: currentlyHoveredDisplay ---
-// --- END NEW ---
 
-
-// --- NEW: CSV DATA LOADING ---
+// --- CSV DATA LOADING ---
 async function loadKnobData() {
     try {
         const response = await fetch('tooltips.csv');
@@ -62,16 +54,13 @@ async function loadKnobData() {
         console.error('Error loading CSV data:', error);
     }
 }
-// --- END NEW ---
 
 // --- NEW: DISPLAY TEXT LOADING ---
 let displayData = new Map();
 let displayDataPromise; // To await this in the loader
 
-/**
- * Loads text data for the synth displays from a CSV.
- * NEW: Reads the "wide" format (L1 and L2 on separate rows).
- */
+// Loads text data for the synth displays from a CSV.
+
 async function loadDisplayData() {
     try {
         const response = await fetch('displays.csv');
@@ -120,7 +109,6 @@ async function loadDisplayData() {
         console.error('Error loading display CSV data:', error);
     }
 }
-
 
 /**
  * Creates a THREE.CanvasTexture with a 4x2 grid of text, with 2 lines per block.
@@ -223,16 +211,13 @@ function createTextTexture(displayName, textArray, width = 512, height = 128) { 
 
 // Start loading both data files
 loadKnobData();
-displayDataPromise = loadDisplayData(); // <-- ADD THIS LINE
-// --- END NEW ---
-
+displayDataPromise = loadDisplayData(); 
 
 // --- PULSE VARIABLES ---
 let clock = new THREE.Clock();
 const PULSE_MIN_INTENSITY = 8; 
 const PULSE_MAX_INTENSITY = 8.5; 
 const PULSE_SPEED = 2; 
-// --- END PULSE VARIABLES ---
 
 // --- FADE-IN & ZOOM-IN VARIABLES ---
 let modelToFadeIn; 
@@ -242,14 +227,12 @@ let isFadingIn = false;
 // Zoom-in variables
 const INITIAL_RADIUS = 70;
 const FINAL_RADIUS = 40; 
-// --- NEW: Zoom limits (were in MapControls) ---
 const MIN_ZOOM_RADIUS = 10;
 const MAX_ZOOM_RADIUS = 70;
-// --- END NEW ---
+
 const EASE_FACTOR = 0.02; 
 const DEFAULT_ROTATION_X = THREE.MathUtils.degToRad(330);
 let currentRadius = INITIAL_RADIUS;
-// --- END FADE-IN & ZOOM-IN VARIABLES ---
 
 // 1. Setup the Scene, Camera, and Renderer
 const scene = new THREE.Scene();
@@ -277,8 +260,6 @@ textureLoader.load(
         scene.background = new THREE.Color(0xcccccc);
     }
 );
-// --- END BACKGROUND TEXTURE LOADING ---
-
 
 // 2. Add Lighting
 let ambientLight = new THREE.AmbientLight(0xffffff, PULSE_MIN_INTENSITY); 
@@ -354,7 +335,6 @@ loader.load(
     }
 );
 
-
 // 4. Angle the Camera (45 degrees looking down)
 const angle = THREE.MathUtils.degToRad(75);
 
@@ -363,14 +343,8 @@ camera.position.y = INITIAL_RADIUS * Math.sin(angle); // Set initial position
 camera.position.z = INITIAL_RADIUS * Math.cos(angle); // Set initial position
 camera.lookAt(0, 0, 0);
 
-
-// 5. Initialize MapControls (with adjusted bounds)
-// --- REMOVED ALL MAPCONTROLS CODE ---
-
-
 // 6. Setup Post-Processing (Effect Composer)
 const composer = new EffectComposer(renderer);
-
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
@@ -386,7 +360,6 @@ outlinePass.edgeThickness = 1.0;
 outlinePass.visibleEdgeColor.set('#70bdc0'); // User's new color
 outlinePass.hiddenEdgeColor.set('#110011');
 composer.addPass(outlinePass);
-// -----------------------------------------
 
 // FilmPass for grain/noise effect
 const filmPass = new FilmPass(
@@ -395,17 +368,15 @@ const filmPass = new FilmPass(
 filmPass.renderToScreen = true;
 composer.addPass(filmPass);
 
-
-// --- MODIFIED: Mouse Move Handler for Raycasting ONLY ---
+// --- MODIFIED: Mouse Move Handler for Raycasting ---
 function onMouseMove(event) {
     // This function is now ONLY for raycasting
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 }
 window.addEventListener('mousemove', onMouseMove, false);
-// ----------------------------------------------
 
-// --- MODIFIED: Mobile Touch Handlers ---
+// --- Mobile Touch Handlers ---
 function onTouchStart(event) {
     if (event.touches.length === 1) {
         const touch = event.touches[0];
@@ -418,7 +389,6 @@ function onTouchStart(event) {
         onDragStart(event);
     }
 }
-
 function onTouchMove(event) {
     if (event.touches.length === 1) { 
         // 1. Run drag logic
@@ -429,7 +399,6 @@ function onTouchMove(event) {
         mouse.y = -Infinity;
     }
 }
-
 function onTouchEnd(event) {
     // 1. Stop drag logic
     onDragEnd();
@@ -442,9 +411,8 @@ function onTouchEnd(event) {
 window.addEventListener('touchstart', onTouchStart, false);
 window.addEventListener('touchmove', onTouchMove, false);
 window.addEventListener('touchend', onTouchEnd, false);
-// --- END MODIFIED ---
 
-// --- NEW: Model Rotation / Drag Logic ---
+// --- Model Rotation / Drag Logic ---
 function onDragStart(event) {
     isDragging = true;
     rotationVelocityY = 0;
@@ -468,7 +436,6 @@ function onDragStart(event) {
     previousMousePosition.x = clientX;
     previousMousePosition.y = clientY;
 }
-
 function onDragMove(event) {
     if (!isDragging || !modelToFadeIn) return;
     
@@ -488,7 +455,6 @@ function onDragMove(event) {
     previousMousePosition.x = clientX;
     previousMousePosition.y = clientY;
 }
-
 function onDragEnd() {
     isDragging = false;
 }
@@ -498,9 +464,8 @@ renderer.domElement.addEventListener('mousedown', onDragStart, false);
 renderer.domElement.addEventListener('mousemove', onDragMove, false);
 renderer.domElement.addEventListener('mouseup', onDragEnd, false);
 renderer.domElement.addEventListener('mouseleave', onDragEnd, false);
-// --- END NEW ---
 
-// --- NEW: Mouse Wheel Zoom Logic ---
+// --- Mouse Wheel Zoom Logic ---
 function onMouseWheel(event) {
     event.preventDefault(); // Stop page from scrolling
 
@@ -511,12 +476,8 @@ function onMouseWheel(event) {
     // Clamp the radius to the min/max limits
     currentRadius = Math.max(MIN_ZOOM_RADIUS, Math.min(MAX_ZOOM_RADIUS, currentRadius));
 }
-
 renderer.domElement.addEventListener('wheel', onMouseWheel, false);
-// --- END NEW ---
 
-
-// --- REPLACED: checkIntersections Function ---
 function checkIntersections() {
     // Don't raycast if dragging
     if (isDragging) return;
@@ -587,7 +548,7 @@ function checkIntersections() {
 }
 // ---------------------------------------------
 
-// --- NEW: GUI DISPLAY CANVAS HELPER FUNCTIONS ---
+// --- GUI DISPLAY CANVAS HELPER FUNCTIONS ---
 function showGuiDisplayCanvas(displayName) {
     hideGuiDisplayCanvas(); // Hide previous first
 
@@ -604,7 +565,6 @@ function showGuiDisplayCanvas(displayName) {
         guiDisplayHost.classList.add('visible');
     }
 }
-
 function hideGuiDisplayCanvas() {
     if (guiDisplayHost) {
         guiDisplayHost.classList.remove('visible');
@@ -614,9 +574,6 @@ function hideGuiDisplayCanvas() {
         }
     }
 }
-// --- END NEW ---
-
-
 // 7. Animation Loop (Render the Scene)
 function animate() {
     requestAnimationFrame(animate);
@@ -706,14 +663,13 @@ if (!isDragging && modelToFadeIn && rotationVelocityY !== 0) {
     composer.render();
 }
 
-// --- MODIFIED: Get Display Element from DOM ---
+// --- Get Display Element from DOM ---
 descriptionDisplayElement = document.getElementById('description-display');
 
-// --- NEW: Get GUI Display Host from DOM ---
+// ---  Get GUI Display Host from DOM ---
 guiDisplayHost = document.getElementById('gui-display-host');
-// --- END NEW ---
 
-// --- NEW: Fullscreen & Landscape Lock Logic ---
+// --- Fullscreen & Landscape Lock Logic ---
 const startOverlay = document.getElementById('start-overlay');
 const startButton = document.getElementById('start-button');
 
@@ -734,7 +690,6 @@ async function startExperience() {
 
 startButton.addEventListener('click', startExperience);
 animate();
-
 
 // 8. Handle Window Resizing
 window.addEventListener('resize', () => {
