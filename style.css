@@ -29,3 +29,19 @@
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
 }
+
+#fade-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #000;
+    /* Place it *under* the start button (1001) 
+      but *above* the three.js canvas (which is at z-index -1 or 0) 
+    */
+    z-index: 1000;
+    pointer-events: none; /* Lets clicks go through */
+    opacity: 1; /* Start fully opaque */
+    transition: opacity 3.5s ease-out; /* Fade-out speed */
+}

@@ -214,8 +214,7 @@ const PULSE_SPEED = 2;
 
 // --- FADE-IN & ZOOM-IN VARIABLES ---
 let modelToFadeIn; 
-const FADE_SPEED = 0.0025; 
-let isFadingIn = false;
+let isFadingIn = false; // intro sequence is running
 
 // Zoom-in variables
 const INITIAL_RADIUS = 70;
@@ -306,25 +305,13 @@ loader.load(
                         material.emissiveIntensity = 0.5; // Adjust glow brightness
                         material.toneMapped = false; // Makes the glow pop more (unaffected by film pass tone mapping)
                         
-                        // Set opacity for fade-in
-                        material.transparent = true;
-                        material.opacity = 0;
+                        // --- REMOVED opacity/transparent lines ---
                         material.needsUpdate = true;
                     };
                     Array.isArray(child.material) ? child.material.forEach(processMaterial) : processMaterial(child.material);
 
-                } else {
-                // --- END NEW ---
-                
-                    // Existing fade-in logic for all other parts
-                    const processMaterial = (material) => {
-                        material.transparent = true;
-                        material.opacity = 0;
-                        material.needsUpdate = true;
-                    };
-                    Array.isArray(child.material) ? child.material.forEach(processMaterial) : processMaterial(child.material);
-                
-                } // <-- NEW else brace
+                } 
+                // --- REMOVED else block that made other parts transparent ---
             }
         });
 
@@ -351,7 +338,7 @@ const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
-// --- NEW: OutlinePass for hover effect ---
+// --- OutlinePass for hover effect ---
 outlinePass = new OutlinePass(
     new THREE.Vector2(window.innerWidth, window.innerHeight), 
     scene, 
@@ -373,13 +360,12 @@ composer.addPass(filmPass);
 
 // --- MODIFIED: Mouse Move Handler for Raycasting ---
 function onMouseMove(event) {
-    // This function is now ONLY for raycasting
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 }
 window.addEventListener('mousemove', onMouseMove, false);
 
-// --- NEW: Mouse Click Handler for Interaction ---
+// --- Mouse Click Handler for Interaction ---
 function onMouseClick(event) {
     // Don't register a click if we are dragging
     if (isDragging || isCameraTransitioning) return;
@@ -392,7 +378,6 @@ function onMouseClick(event) {
     checkIntersections(true); // <-- Pass 'true' to indicate a click action
 }
 
-// --- MOVED BLOCK: This event listener is now correct ---
 renderer.domElement.addEventListener('click', onMouseClick, false);
 
 // --- Mobile Touch Handlers ---
@@ -525,12 +510,11 @@ function checkIntersections(isClick = false) {
         }
     }
 
-    // --- MOVED BLOCK: This logic is now CORRECTLY PLACED inside checkIntersections ---
     if (isClick && hoveredInteractive && (hoveredInteractive.name === 'Display01' || hoveredInteractive.name === 'Display02')) {
         isCameraFocused = true;
         isCameraTransitioning = true;
         
-        // --- MODIFIED: Dynamic, Rotation-Aware Position Calculation ---
+        // --- Dynamic, Rotation-Aware Position Calculation ---
         
         // 1. Get the world position of the display (this is our lookAt target)
         hoveredInteractive.getWorldPosition(targetLookAt);
@@ -542,9 +526,6 @@ function checkIntersections(isClick = false) {
         // Make sure the object's matrix is updated
         hoveredInteractive.updateWorldMatrix(true, false); 
         
-        // --- MODIFIED ASSUMPTION for flat planes (CRASH FIX) ---
-        // Assume Local Y (column 1) is the display's "normal" (pointing out).
-        // Assume Local Z (column 2) is the display's "up".
         displayNormal.setFromMatrixColumn(hoveredInteractive.matrixWorld, 1); 
         displayUp.setFromMatrixColumn(hoveredInteractive.matrixWorld, 2);
         displayUp.negate();
@@ -553,7 +534,6 @@ function checkIntersections(isClick = false) {
         targetCameraUp.copy(displayUp).normalize();
 
         // 4. Set the target camera position.
-        // We'll position it 16 units *away* from the display's face, along its normal.
         displayNormal.multiplyScalar(8); 
         targetCameraPosition.copy(targetLookAt).add(displayNormal);
         // --- END MODIFIED ---
@@ -568,9 +548,8 @@ function checkIntersections(isClick = false) {
         outlinePass.selectedObjects = [];
         return; // Stop processing, we've handled the click
     }
-    // --- END MOVED BLOCK ---
 
-    // --- NEW STICKY LOGIC FOR ALL GUI (with deselect fix) ---
+    // --- STICKY LOGIC FOR ALL GUI ---
     if (hoveredInteractive && hoveredInteractive !== selectedObject) {
         selectedObject = hoveredInteractive;
         outlinePass.selectedObjects = [selectedObject];
@@ -598,26 +577,19 @@ function checkIntersections(isClick = false) {
                     }, 150); 
                 }
             }
-
-        // --- REMOVED: else if for Display01 ---
-        // --- REMOVED: else if for Display02 ---
-
-        } // <-- This brace is now correct
-    
-    } else if (!hoveredInteractive && selectedObject) { // <-- NEW DESELECT FIX
+        }
+    } else if (!hoveredInteractive && selectedObject) { 
         // Mouse is on no object, but an object is still selected
         selectedObject = null;
         outlinePass.selectedObjects = [];
         
         // Hide all GUIs
-        // REMOVED: hideGuiDisplayCanvas();
         if (descriptionDisplayElement) descriptionDisplayElement.style.display = 'none';
         currentDescriptionText = "";
     }
 }
 
 // --- REMOVED: GUI DISPLAY CANVAS HELPER FUNCTIONS ---
-
 // 7. Animation Loop (Render the Scene)
 function animate() {
     requestAnimationFrame(animate);
@@ -629,11 +601,10 @@ function animate() {
     ambientLight.intensity = newIntensity;
     // --- END PULSE LOGIC ---
 
-    // --- FADE-IN & CURVED ZOOM-IN LOGIC ---
+    // --- MODIFIED: INTRO ZOOM & BOBBING LOGIC ---
     if (isFadingIn && modelToFadeIn) {
-        let allMaterialsOpaque = true;
 
-        // --- MODIFIED: Make the model gently bob when not being dragged OR FOCUSED ---
+        // --- Make the model gently bob... ---
         if (modelToFadeIn && !isDragging && !isCameraFocused) {
             // You can adjust 0.5/0.3 to change float speed
             // You can adjust 0.03 to change the float amount
@@ -645,24 +616,6 @@ function animate() {
             modelToFadeIn.rotation.x = THREE.MathUtils.lerp(modelToFadeIn.rotation.x, DEFAULT_ROTATION_X, 0.1);
             modelToFadeIn.rotation.z = THREE.MathUtils.lerp(modelToFadeIn.rotation.z, 0, 0.1);
         }
-        // --- END MODIFIED BOBBING ---
-
-
-        // 1. FADE-IN
-        modelToFadeIn.traverse((child) => {
-            if (child.isMesh && child.material) {
-                const processMaterial = (material) => {
-                    if (material.opacity < 1) {
-                        material.opacity += FADE_SPEED;
-                        if (material.opacity >= 1) {
-                            material.opacity = 1;
-                        }
-                        allMaterialsOpaque = false;
-                    }
-                };
-                Array.isArray(child.material) ? child.material.forEach(processMaterial) : processMaterial(child.material);
-            }
-        });
         
         // 2. CURVED ZOOM-IN (Intro anim)
         if (currentRadius > FINAL_RADIUS) {
@@ -671,15 +624,14 @@ function animate() {
             currentRadius -= zoomStep;
             if (distanceRemaining < 0.01) { 
                 currentRadius = FINAL_RADIUS; 
-            }
-            allMaterialsOpaque = false; 
-            if (allMaterialsOpaque) {
-                isFadingIn = false;
+                isFadingIn = false; // <-- Set flag to false HERE
                 console.log('Intro sequence complete.');
             }
+        } else {
+             // Also handle case where we are already at or past the zoom
+             isFadingIn = false;
         }
     }
-    // --- END FADE-IN & CURVED ZOOM-IN LOGIC ---
     
 if (!isDragging && modelToFadeIn && rotationVelocityY !== 0) {
         
@@ -745,12 +697,11 @@ if (!isDragging && modelToFadeIn && rotationVelocityY !== 0) {
 // --- Get Display Element from DOM ---
 descriptionDisplayElement = document.getElementById('description-display');
 
-// --- REMOVED: Get GUI Display Host from DOM ---
-
 // --- Fullscreen & Landscape Lock Logic ---
 const startOverlay = document.getElementById('start-overlay');
 const startButton = document.getElementById('start-button');
 
+// --- startExperience function ---
 async function startExperience() {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     try {
@@ -763,7 +714,16 @@ async function startExperience() {
     } catch (error) {
         console.warn("Could not enter fullscreen or lock orientation:", error);
     } finally {
+        // Hide the start button overlay
         startOverlay.style.display = 'none';
+        
+        // Get the new fade overlay and trigger the fade-out
+        const fadeOverlay = document.getElementById('fade-overlay');
+        if (fadeOverlay) {
+            fadeOverlay.style.opacity = '0';
+        }
+        
+        // Start the zoom-in animation
         isFadingIn = true; 
     }
 }
