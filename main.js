@@ -10,7 +10,7 @@ import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 // --- RAYCASTING & OUTLINE VARIABLES ---
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
-let selectedKnob = null; 
+let selectedObject = null; // <-- RENAMED
 let outlinePass;
 // --- END RAYCASTING & OUTLINE VARIABLES ---
 
@@ -31,6 +31,14 @@ let descriptionDisplayElement;
 let currentDescriptionText = ""; 
 let knobDescriptions = new Map();
 // --- END MODIFIED ---
+
+// --- NEW: GUI DISPLAY CANVAS VARIABLES ---
+let displayCanvas01 = null; // Will store the <canvas> for Display01
+let displayCanvas02 = null; // Will store the <canvas> for Display02
+let guiDisplayHost = null;  // The HTML div that will hold the canvas
+// --- DELETED: currentlyHoveredDisplay ---
+// --- END NEW ---
+
 
 // --- NEW: CSV DATA LOADING ---
 async function loadKnobData() {
@@ -116,18 +124,22 @@ async function loadDisplayData() {
 
 /**
  * Creates a THREE.CanvasTexture with a 4x2 grid of text, with 2 lines per block.
+ * @param {string} displayName - The name of the display ("Display01" or "Display02")
  * @param {string[][]} textArray - An array of 8 arrays, each containing 2 strings.
  * @param {number} [width=512] - Canvas width.
  * @param {number} [height=128] - Canvas height.
  * @returns {THREE.CanvasTexture}
  */
-function createTextTexture(textArray, width = 512, height = 128) {
+function createTextTexture(displayName, textArray, width = 512, height = 128) { // <-- MODIFIED
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     
     const ctx = canvas.getContext('2d');
     
+    // Crispy pixel setting
+    ctx.imageSmoothingEnabled = false; 
+
     // Background
     ctx.fillStyle = '#0a0a0a'; // Dark screen background
     ctx.fillRect(0, 0, width, height);
@@ -160,7 +172,7 @@ function createTextTexture(textArray, width = 512, height = 128) {
     
     // NEW: Smaller font size to fit two lines
     const fontSize = blockHeight * 0.3; // 30% of block height
-    ctx.font = `bold ${fontSize}px "Press Start 2P", monospace`;
+    ctx.font = `bold ${fontSize}px "Press Start 2P", monospace`; 
     
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle'; // Align text vertically to the Y-coordinate
@@ -191,6 +203,14 @@ function createTextTexture(textArray, width = 512, height = 128) {
             ctx.fillText(line2, centerX, line2Y);
         }
     }
+
+    // --- NEW: Save canvas to global variable ---
+    if (displayName === 'Display01') {
+        displayCanvas01 = canvas;
+    } else if (displayName === 'Display02') {
+        displayCanvas02 = canvas;
+    }
+    // --- END NEW ---
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.flipY = false;
@@ -233,7 +253,7 @@ let currentRadius = INITIAL_RADIUS;
 
 // 1. Setup the Scene, Camera, and Renderer
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(20, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(20, window.innerWidth / window.innerHeight, 0.1, 1000)
 const renderer = new THREE.WebGLRenderer({ antiallias: true });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -293,7 +313,7 @@ loader.load(
                     // Get text array from CSV, or provide a default 8-block array
                     const defaultArray = [["1-1", "1-2"], ["2-1", "2-2"], ["3-1", "3-2"], ["4-1", "4-2"], ["5-1", "5-2"], ["6-1", "6-2"], ["7-1", "7-2"], ["8-1", "8-2"]];
                     const textArray = displayData.get(child.name) || defaultArray;
-                    const texture = createTextTexture(textArray); // Pass the whole array
+                    const texture = createTextTexture(child.name, textArray); // <-- MODIFIED: Pass child.name
 
                     const processMaterial = (material) => {
                         material.map = texture;
@@ -429,6 +449,12 @@ function onDragStart(event) {
     isDragging = true;
     rotationVelocityY = 0;
     
+    // --- NEW: Hide GUI on drag start ---
+    hideGuiDisplayCanvas(); 
+    if (descriptionDisplayElement) descriptionDisplayElement.style.display = 'none';
+    currentDescriptionText = "";
+    // --- END NEW ---
+
     // Snap back to default flat rotation when click starts
     if (modelToFadeIn) {
         modelToFadeIn.rotation.x = DEFAULT_ROTATION_X;
@@ -490,50 +516,105 @@ renderer.domElement.addEventListener('wheel', onMouseWheel, false);
 // --- END NEW ---
 
 
-// --- MODIFIED: Raycasting Logic for Sticky Outline & Display ---
+// --- REPLACED: checkIntersections Function ---
 function checkIntersections() {
-    // --- NEW: Don't check for knobs while dragging ---
+    // Don't raycast if dragging
     if (isDragging) return;
-    // --- END NEW ---
 
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObject(modelToFadeIn, true); 
 
-    let currentlyHoveredKnob = null;
+    let hoveredInteractive = null; 
+
     if (intersects.length > 0) {
         let objectToCheck = intersects[0].object;
         while (objectToCheck) {
-            if (objectToCheck.name && objectToCheck.name.includes('Knob')) {
-                currentlyHoveredKnob = objectToCheck;
-                break; 
+            if (objectToCheck.name) {
+                // Check for Knobs or Displays
+                if (objectToCheck.name.includes('Knob') || objectToCheck.name === 'Display01' || objectToCheck.name === 'Display02') {
+                    hoveredInteractive = objectToCheck; // Found an object
+                    break;
+                }
             }
             objectToCheck = objectToCheck.parent;
         }
     }
 
-    if (currentlyHoveredKnob && currentlyHoveredKnob !== selectedKnob) {
-        selectedKnob = currentlyHoveredKnob; 
-        outlinePass.selectedObjects = [selectedKnob];
+    // --- NEW STICKY LOGIC FOR ALL GUI ---
+    if (hoveredInteractive && hoveredInteractive !== selectedObject) {
+        selectedObject = hoveredInteractive;
+        outlinePass.selectedObjects = [selectedObject];
         
-        const objectName = selectedKnob.name;
-        const description = knobDescriptions.get(objectName);
-        
-        if (description && description !== currentDescriptionText) {
-            if (descriptionDisplayElement) {
-                descriptionDisplayElement.innerHTML = description;
-                currentDescriptionText = description; 
-                descriptionDisplayElement.style.transform = 'scale(1.1)'; 
+        // Now, decide which GUI to show
+        if (selectedObject.name.includes('Knob')) {
+            // --- It's a Knob ---
+            hideGuiDisplayCanvas(); // Hide display GUI
+            
+            // Show knob description
+            const objectName = selectedObject.name;
+            const description = knobDescriptions.get(objectName);
+            
+            if (description && description !== currentDescriptionText) {
+                if (descriptionDisplayElement) {
+                    descriptionDisplayElement.style.display = 'block'; // <-- CORRECTED
+                    descriptionDisplayElement.innerHTML = description;
+                    currentDescriptionText = description; 
+                    descriptionDisplayElement.style.transform = 'scale(1.1)'; 
 
-                setTimeout(() => {
-                    if (descriptionDisplayElement) {
-                        descriptionDisplayElement.style.transform = 'scale(1)'; 
-                    }
-                }, 150); 
+                    setTimeout(() => {
+                        if (descriptionDisplayElement) {
+                            descriptionDisplayElement.style.transform = 'scale(1)'; 
+                        }
+                    }, 150); 
+                }
             }
+
+        } else if (selectedObject.name === 'Display01') {
+            // --- It's Display01 ---
+            if (descriptionDisplayElement) descriptionDisplayElement.style.display = 'none'; // <-- CORRECTED
+            currentDescriptionText = "";
+            showGuiDisplayCanvas('Display01'); // Show display GUI
+
+        } else if (selectedObject.name === 'Display02') {
+            // --- It's Display02 ---
+            if (descriptionDisplayElement) descriptionDisplayElement.style.display = 'none'; // <-- CORRECTED
+            currentDescriptionText = "";
+            showGuiDisplayCanvas('Display02'); // Show display GUI
+        }
+    }
+    
+    // --- REMOVED old non-sticky display logic ---
+}
+// ---------------------------------------------
+
+// --- NEW: GUI DISPLAY CANVAS HELPER FUNCTIONS ---
+function showGuiDisplayCanvas(displayName) {
+    hideGuiDisplayCanvas(); // Hide previous first
+
+    let canvasToShow = null;
+    if (displayName === 'Display01') {
+        canvasToShow = displayCanvas01;
+    } else if (displayName === 'Display02') {
+        canvasToShow = displayCanvas02;
+    }
+
+    if (canvasToShow && guiDisplayHost) {
+        // Append the actual canvas element to the host div
+        guiDisplayHost.appendChild(canvasToShow);
+        guiDisplayHost.classList.add('visible');
+    }
+}
+
+function hideGuiDisplayCanvas() {
+    if (guiDisplayHost) {
+        guiDisplayHost.classList.remove('visible');
+        // Remove any canvas inside
+        while (guiDisplayHost.firstChild) {
+            guiDisplayHost.removeChild(guiDisplayHost.firstChild);
         }
     }
 }
-// ---------------------------------------------
+// --- END NEW ---
 
 
 // 7. Animation Loop (Render the Scene)
@@ -627,6 +708,10 @@ if (!isDragging && modelToFadeIn && rotationVelocityY !== 0) {
 
 // --- MODIFIED: Get Display Element from DOM ---
 descriptionDisplayElement = document.getElementById('description-display');
+
+// --- NEW: Get GUI Display Host from DOM ---
+guiDisplayHost = document.getElementById('gui-display-host');
+// --- END NEW ---
 
 // --- NEW: Fullscreen & Landscape Lock Logic ---
 const startOverlay = document.getElementById('start-overlay');

@@ -1,0 +1,31 @@
+#gui-display-host {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+    
+    /* Hidden by default */
+    display: none; 
+
+    /* Styling */
+    background: #0a0a0a;
+    border: 3px solid #70bdc0; /* Match outline color */
+    box-shadow: 0 0 15px rgba(112, 189, 192, 0.5);
+}
+
+/* This class will be added by JS */
+#gui-display-host.visible {
+    display: block;
+}
+
+/* Style the canvas when it's inside the host */
+#gui-display-host canvas {
+    display: block;
+    width: 70vh; /* Scale down the 512px canvas */
+    height: 18.5vh;
+
+    /* Keep the crispy pixel look */
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+}
