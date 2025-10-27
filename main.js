@@ -54,8 +54,158 @@ async function loadKnobData() {
         console.error('Error loading CSV data:', error);
     }
 }
-loadKnobData();
 // --- END NEW ---
+
+// --- NEW: DISPLAY TEXT LOADING ---
+let displayData = new Map();
+let displayDataPromise; // To await this in the loader
+
+/**
+ * Loads text data for the synth displays from a CSV.
+ * NEW: Reads the "wide" format (L1 and L2 on separate rows).
+ */
+async function loadDisplayData() {
+    try {
+        const response = await fetch('displays.csv');
+        const data = await response.text();
+        const lines = data.split('\n');
+
+        // 1. Parse all 8 text values from each line into a temporary map
+        const tempRowData = new Map();
+        for (let i = 1; i < lines.length; i++) { // Start at 1 to skip header
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            const parts = line.split(',');
+            const objectNameKey = (parts[0] || "").trim(); // e.g., "Display01_L1"
+            if (!objectNameKey) continue;
+
+            const textValues = [];
+            for (let j = 1; j <= 8; j++) { // Get Text1 through Text8
+                const text = (parts[j] || "").trim().replace(/^"|"$/g, '');
+                textValues.push(text);
+            }
+            tempRowData.set(objectNameKey, textValues);
+        }
+
+        // 2. Combine the L1 and L2 data into the final nested array structure
+        const displayNames = ["Display01", "Display02"]; // Add more display names here if needed
+        for (const name of displayNames) {
+            const line1Data = tempRowData.get(`${name}_L1`);
+            const line2Data = tempRowData.get(`${name}_L2`);
+
+            if (!line1Data || !line2Data) {
+                console.warn(`Missing L1 or L2 data for ${name}`);
+                continue;
+            }
+
+            const combinedBlocks = []; // This will be [ ["B1_L1", "B1_L2"], ["B2_L1", "B2_L2"], ... ]
+            for (let i = 0; i < 8; i++) {
+                combinedBlocks.push([ line1Data[i] || "", line2Data[i] || "" ]);
+            }
+            
+            displayData.set(name, combinedBlocks); // Set the final data for "Display01", "Display02", etc.
+        }
+
+        console.log('Display data loaded (wide row format):', displayData);
+    } catch (error) {
+        console.error('Error loading display CSV data:', error);
+    }
+}
+
+
+/**
+ * Creates a THREE.CanvasTexture with a 4x2 grid of text, with 2 lines per block.
+ * @param {string[][]} textArray - An array of 8 arrays, each containing 2 strings.
+ * @param {number} [width=512] - Canvas width.
+ * @param {number} [height=128] - Canvas height.
+ * @returns {THREE.CanvasTexture}
+ */
+function createTextTexture(textArray, width = 512, height = 128) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    
+    const ctx = canvas.getContext('2d');
+    
+    // Background
+    ctx.fillStyle = '#0a0a0a'; // Dark screen background
+    ctx.fillRect(0, 0, width, height);
+
+    // --- Define Grid ---
+    const cols = 4;
+    const rows = 2;
+    const blockWidth = width / cols;
+    const blockHeight = height / rows;
+
+    // --- Draw Grid Lines ---
+    ctx.strokeStyle = '#334444'; // Dark cyan, fits the theme
+    ctx.lineWidth = 2;
+
+    // 3 Vertical lines
+    for (let i = 1; i < cols; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * blockWidth, 0);
+        ctx.lineTo(i * blockWidth, height);
+        ctx.stroke();
+    }
+    // 1 Horizontal line
+    ctx.beginPath();
+    ctx.moveTo(0, blockHeight);
+    ctx.lineTo(width, blockHeight);
+    ctx.stroke();
+
+    // --- Draw Text in Blocks ---
+    ctx.fillStyle = '#70bdc0'; // Use your outline color for the text
+    
+    // NEW: Smaller font size to fit two lines
+    const fontSize = blockHeight * 0.3; // 30% of block height
+    ctx.font = `bold ${fontSize}px "Press Start 2P", monospace`;
+    
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle'; // Align text vertically to the Y-coordinate
+
+    for (let i = 0; i < 8; i++) {
+        // NEW: Get the array [line1, line2] for this block
+        const textBlock = textArray[i] || ["", ""]; 
+        const line1 = textBlock[0] || "";
+        const line2 = textBlock[1] || "";
+
+        // Calculate grid position
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+
+        // Calculate center X
+        const centerX = (col * blockWidth) + (blockWidth / 2);
+        
+        // NEW: Calculate Y positions for each line, relative to the block's top
+        const blockTopY = row * blockHeight;
+        const line1Y = blockTopY + (blockHeight * 0.35); // Position at 35% down
+        const line2Y = blockTopY + (blockHeight * 0.70); // Position at 70% down
+
+        // Draw the two lines
+        if (line1) {
+            ctx.fillText(line1, centerX, line1Y);
+        }
+        if (line2) {
+            ctx.fillText(line2, centerX, line2Y);
+        }
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.flipY = false;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.needsUpdate = true;
+    texture.anisotropy = renderer.capabilities.getMaxAnisotropy(); // Improves quality
+    
+    return texture;
+}
+
+// Start loading both data files
+loadKnobData();
+displayDataPromise = loadDisplayData(); // <-- ADD THIS LINE
+// --- END NEW ---
+
 
 // --- PULSE VARIABLES ---
 let clock = new THREE.Clock();
@@ -84,7 +234,7 @@ let currentRadius = INITIAL_RADIUS;
 // 1. Setup the Scene, Camera, and Renderer
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(20, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ antiaslias: true });
+const renderer = new THREE.WebGLRenderer({ antiallias: true });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -124,20 +274,53 @@ const loader = new GLTFLoader();
 
 loader.load(
     'Synth Model/synth_model.glb',
-    function (gltf) {
+    async function (gltf) { // <-- 1. MAKE THIS ASYNC
         modelToFadeIn = gltf.scene;
         modelToFadeIn.rotation.x = DEFAULT_ROTATION_X;
         modelToFadeIn.rotation.y = THREE.MathUtils.degToRad(45);
-        modelToFadeIn.position.x = -5; 
-        modelToFadeIn.position.y = -5; 
+        modelToFadeIn.position.x = -5;
+        modelToFadeIn.position.y = -5;
+
+        // --- 2. AWAIT YOUR DISPLAY DATA ---
+        await displayDataPromise; 
+
+        // --- 3. MODIFY THE TRAVERSE LOGIC ---
         modelToFadeIn.traverse((child) => {
             if (child.isMesh && child.material) {
-                const processMaterial = (material) => {
-                    material.transparent = true;
-                    material.opacity = 0;
-                    material.needsUpdate = true;
-                };
-                Array.isArray(child.material) ? child.material.forEach(processMaterial) : processMaterial(child.material);
+                
+                // --- NEW: Handle Displays Separately ---
+                if (child.name === 'Display01' || child.name === 'Display02') {
+                    // Get text array from CSV, or provide a default 8-block array
+                    const defaultArray = [["1-1", "1-2"], ["2-1", "2-2"], ["3-1", "3-2"], ["4-1", "4-2"], ["5-1", "5-2"], ["6-1", "6-2"], ["7-1", "7-2"], ["8-1", "8-2"]];
+                    const textArray = displayData.get(child.name) || defaultArray;
+                    const texture = createTextTexture(textArray); // Pass the whole array
+
+                    const processMaterial = (material) => {
+                        material.map = texture;
+                        material.emissiveMap = texture; // Make the text glow
+                        material.emissive = new THREE.Color(0xffffff); // Glow full white
+                        material.emissiveIntensity = 0.5; // Adjust glow brightness
+                        material.toneMapped = false; // Makes the glow pop more (unaffected by film pass tone mapping)
+                        
+                        // Set opacity for fade-in
+                        material.transparent = true;
+                        material.opacity = 0;
+                        material.needsUpdate = true;
+                    };
+                    Array.isArray(child.material) ? child.material.forEach(processMaterial) : processMaterial(child.material);
+
+                } else {
+                // --- END NEW ---
+                
+                    // Existing fade-in logic for all other parts
+                    const processMaterial = (material) => {
+                        material.transparent = true;
+                        material.opacity = 0;
+                        material.needsUpdate = true;
+                    };
+                    Array.isArray(child.material) ? child.material.forEach(processMaterial) : processMaterial(child.material);
+                
+                } // <-- NEW else brace
             }
         });
 
