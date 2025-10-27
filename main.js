@@ -27,12 +27,13 @@ let descriptionDisplayElement;
 let currentDescriptionText = ""; 
 let knobDescriptions = new Map();
 
-// --- NEW: GUI DISPLAY CANVAS VARIABLES ---
-let displayCanvas01 = null; // Will store the <canvas> for Display01
-let displayCanvas02 = null; // Will store the <canvas> for Display02
-let guiDisplayHost = null;  // The HTML div that will hold the canvas
+// --- DISPLAY TEXT LOADING ---
+let displayData = new Map();
+let displayDataPromise; // To await this in the loader
 
-// --- CSV DATA LOADING ---
+// --- REMOVED: GUI DISPLAY CANVAS VARIABLES ---
+
+// --- CSV DATA LOADING (Only for Knobs) ---
 async function loadKnobData() {
     try {
         const response = await fetch('tooltips.csv');
@@ -55,12 +56,7 @@ async function loadKnobData() {
     }
 }
 
-// --- NEW: DISPLAY TEXT LOADING ---
-let displayData = new Map();
-let displayDataPromise; // To await this in the loader
-
-// Loads text data for the synth displays from a CSV.
-
+// --- NEW: loadDisplayData function restored ---
 async function loadDisplayData() {
     try {
         const response = await fetch('displays.csv');
@@ -110,6 +106,7 @@ async function loadDisplayData() {
     }
 }
 
+// --- NEW: createTextTexture function restored ---
 /**
  * Creates a THREE.CanvasTexture with a 4x2 grid of text, with 2 lines per block.
  * @param {string} displayName - The name of the display ("Display01" or "Display02")
@@ -118,7 +115,7 @@ async function loadDisplayData() {
  * @param {number} [height=128] - Canvas height.
  * @returns {THREE.CanvasTexture}
  */
-function createTextTexture(displayName, textArray, width = 512, height = 128) { // <-- MODIFIED
+function createTextTexture(displayName, textArray, width = 512, height = 128) {
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -192,13 +189,7 @@ function createTextTexture(displayName, textArray, width = 512, height = 128) { 
         }
     }
 
-    // --- NEW: Save canvas to global variable ---
-    if (displayName === 'Display01') {
-        displayCanvas01 = canvas;
-    } else if (displayName === 'Display02') {
-        displayCanvas02 = canvas;
-    }
-    // --- END NEW ---
+    // --- REMOVED: Save canvas to global variable ---
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.flipY = false;
@@ -209,8 +200,10 @@ function createTextTexture(displayName, textArray, width = 512, height = 128) { 
     return texture;
 }
 
-// Start loading both data files
+
+// Start loading knob data
 loadKnobData();
+// --- NEW: displayDataPromise restored --- 
 displayDataPromise = loadDisplayData(); 
 
 // --- PULSE VARIABLES ---
@@ -233,6 +226,16 @@ const MAX_ZOOM_RADIUS = 70;
 const EASE_FACTOR = 0.02; 
 const DEFAULT_ROTATION_X = THREE.MathUtils.degToRad(330);
 let currentRadius = INITIAL_RADIUS;
+
+// --- CAMERA FOCUS VARIABLES ---
+let isCameraFocused = false; // Is the camera in a zoomed-in, focused state?
+let isCameraTransitioning = false; // Is the camera currently transitioning?
+let targetCameraPosition = new THREE.Vector3(); // Where the camera should move to
+let targetLookAt = new THREE.Vector3(0, 0, 0); // Where the camera should look
+let lerpedLookAt = new THREE.Vector3(0, 0, 0); // For smooth lookAt transitions
+let targetCameraUp = new THREE.Vector3(0, 1, 0); // <-- NEW: Camera's "up" vector
+let lerpedCameraUp = new THREE.Vector3(0, 1, 0); // <-- NEW: Smoothed "up" vector
+const CAMERA_FOCUS_SPEED = 0.05; // Speed for smooth transition (0 to 1)
 
 // 1. Setup the Scene, Camera, and Renderer
 const scene = new THREE.Scene();
@@ -294,7 +297,7 @@ loader.load(
                     // Get text array from CSV, or provide a default 8-block array
                     const defaultArray = [["1-1", "1-2"], ["2-1", "2-2"], ["3-1", "3-2"], ["4-1", "4-2"], ["5-1", "5-2"], ["6-1", "6-2"], ["7-1", "7-2"], ["8-1", "8-2"]];
                     const textArray = displayData.get(child.name) || defaultArray;
-                    const texture = createTextTexture(child.name, textArray); // <-- MODIFIED: Pass child.name
+                    const texture = createTextTexture(child.name, textArray); 
 
                     const processMaterial = (material) => {
                         material.map = texture;
@@ -376,6 +379,22 @@ function onMouseMove(event) {
 }
 window.addEventListener('mousemove', onMouseMove, false);
 
+// --- NEW: Mouse Click Handler for Interaction ---
+function onMouseClick(event) {
+    // Don't register a click if we are dragging
+    if (isDragging || isCameraTransitioning) return;
+
+    // Set mouse position for raycaster
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    
+    // Check intersections immediately on click
+    checkIntersections(true); // <-- Pass 'true' to indicate a click action
+}
+
+// --- MOVED BLOCK: This event listener is now correct ---
+renderer.domElement.addEventListener('click', onMouseClick, false);
+
 // --- Mobile Touch Handlers ---
 function onTouchStart(event) {
     if (event.touches.length === 1) {
@@ -407,7 +426,6 @@ function onTouchEnd(event) {
     mouse.x = -Infinity; 
     mouse.y = -Infinity;
 }
-
 window.addEventListener('touchstart', onTouchStart, false);
 window.addEventListener('touchmove', onTouchMove, false);
 window.addEventListener('touchend', onTouchEnd, false);
@@ -417,11 +435,17 @@ function onDragStart(event) {
     isDragging = true;
     rotationVelocityY = 0;
     
-    // --- NEW: Hide GUI on drag start ---
-    hideGuiDisplayCanvas(); 
+    // --- Reset camera focus on drag ---
+    if (isCameraFocused) {
+        isCameraFocused = false;
+        isCameraTransitioning = true;
+        // The animate loop will handle lerping back
+    }
+     
+    // ---  Hide knob GUI on drag start ---
+    // REMOVED: hideGuiDisplayCanvas(); 
     if (descriptionDisplayElement) descriptionDisplayElement.style.display = 'none';
     currentDescriptionText = "";
-    // --- END NEW ---
 
     // Snap back to default flat rotation when click starts
     if (modelToFadeIn) {
@@ -478,7 +502,7 @@ function onMouseWheel(event) {
 }
 renderer.domElement.addEventListener('wheel', onMouseWheel, false);
 
-function checkIntersections() {
+function checkIntersections(isClick = false) { 
     // Don't raycast if dragging
     if (isDragging) return;
 
@@ -501,7 +525,52 @@ function checkIntersections() {
         }
     }
 
-    // --- NEW STICKY LOGIC FOR ALL GUI ---
+    // --- MOVED BLOCK: This logic is now CORRECTLY PLACED inside checkIntersections ---
+    if (isClick && hoveredInteractive && (hoveredInteractive.name === 'Display01' || hoveredInteractive.name === 'Display02')) {
+        isCameraFocused = true;
+        isCameraTransitioning = true;
+        
+        // --- MODIFIED: Dynamic, Rotation-Aware Position Calculation ---
+        
+        // 1. Get the world position of the display (this is our lookAt target)
+        hoveredInteractive.getWorldPosition(targetLookAt);
+        
+        // 2. Get the display's local axes in world space.
+        const displayUp = new THREE.Vector3();
+        const displayNormal = new THREE.Vector3(); // This is the vector pointing OUT of the screen
+        
+        // Make sure the object's matrix is updated
+        hoveredInteractive.updateWorldMatrix(true, false); 
+        
+        // --- MODIFIED ASSUMPTION for flat planes (CRASH FIX) ---
+        // Assume Local Y (column 1) is the display's "normal" (pointing out).
+        // Assume Local Z (column 2) is the display's "up".
+        displayNormal.setFromMatrixColumn(hoveredInteractive.matrixWorld, 1); 
+        displayUp.setFromMatrixColumn(hoveredInteractive.matrixWorld, 2);
+        displayUp.negate();
+
+        // 3. Set the target camera "up" vector. This fixes the Z-axis roll.
+        targetCameraUp.copy(displayUp).normalize();
+
+        // 4. Set the target camera position.
+        // We'll position it 16 units *away* from the display's face, along its normal.
+        displayNormal.multiplyScalar(8); 
+        targetCameraPosition.copy(targetLookAt).add(displayNormal);
+        // --- END MODIFIED ---
+        
+        // Hide any GUI that might be open
+        // REMOVED: hideGuiDisplayCanvas();
+        if (descriptionDisplayElement) descriptionDisplayElement.style.display = 'none';
+        currentDescriptionText = "";
+        
+        // Deselect object so outline goes away
+        selectedObject = null;
+        outlinePass.selectedObjects = [];
+        return; // Stop processing, we've handled the click
+    }
+    // --- END MOVED BLOCK ---
+
+    // --- NEW STICKY LOGIC FOR ALL GUI (with deselect fix) ---
     if (hoveredInteractive && hoveredInteractive !== selectedObject) {
         selectedObject = hoveredInteractive;
         outlinePass.selectedObjects = [selectedObject];
@@ -509,7 +578,7 @@ function checkIntersections() {
         // Now, decide which GUI to show
         if (selectedObject.name.includes('Knob')) {
             // --- It's a Knob ---
-            hideGuiDisplayCanvas(); // Hide display GUI
+            // REMOVED: hideGuiDisplayCanvas(); // Hide display GUI
             
             // Show knob description
             const objectName = selectedObject.name;
@@ -517,7 +586,7 @@ function checkIntersections() {
             
             if (description && description !== currentDescriptionText) {
                 if (descriptionDisplayElement) {
-                    descriptionDisplayElement.style.display = 'block'; // <-- CORRECTED
+                    descriptionDisplayElement.style.display = 'block'; 
                     descriptionDisplayElement.innerHTML = description;
                     currentDescriptionText = description; 
                     descriptionDisplayElement.style.transform = 'scale(1.1)'; 
@@ -530,50 +599,25 @@ function checkIntersections() {
                 }
             }
 
-        } else if (selectedObject.name === 'Display01') {
-            // --- It's Display01 ---
-            if (descriptionDisplayElement) descriptionDisplayElement.style.display = 'none'; // <-- CORRECTED
-            currentDescriptionText = "";
-            showGuiDisplayCanvas('Display01'); // Show display GUI
+        // --- REMOVED: else if for Display01 ---
+        // --- REMOVED: else if for Display02 ---
 
-        } else if (selectedObject.name === 'Display02') {
-            // --- It's Display02 ---
-            if (descriptionDisplayElement) descriptionDisplayElement.style.display = 'none'; // <-- CORRECTED
-            currentDescriptionText = "";
-            showGuiDisplayCanvas('Display02'); // Show display GUI
-        }
-    }
+        } // <-- This brace is now correct
     
-    // --- REMOVED old non-sticky display logic ---
-}
-// ---------------------------------------------
-
-// --- GUI DISPLAY CANVAS HELPER FUNCTIONS ---
-function showGuiDisplayCanvas(displayName) {
-    hideGuiDisplayCanvas(); // Hide previous first
-
-    let canvasToShow = null;
-    if (displayName === 'Display01') {
-        canvasToShow = displayCanvas01;
-    } else if (displayName === 'Display02') {
-        canvasToShow = displayCanvas02;
-    }
-
-    if (canvasToShow && guiDisplayHost) {
-        // Append the actual canvas element to the host div
-        guiDisplayHost.appendChild(canvasToShow);
-        guiDisplayHost.classList.add('visible');
+    } else if (!hoveredInteractive && selectedObject) { // <-- NEW DESELECT FIX
+        // Mouse is on no object, but an object is still selected
+        selectedObject = null;
+        outlinePass.selectedObjects = [];
+        
+        // Hide all GUIs
+        // REMOVED: hideGuiDisplayCanvas();
+        if (descriptionDisplayElement) descriptionDisplayElement.style.display = 'none';
+        currentDescriptionText = "";
     }
 }
-function hideGuiDisplayCanvas() {
-    if (guiDisplayHost) {
-        guiDisplayHost.classList.remove('visible');
-        // Remove any canvas inside
-        while (guiDisplayHost.firstChild) {
-            guiDisplayHost.removeChild(guiDisplayHost.firstChild);
-        }
-    }
-}
+
+// --- REMOVED: GUI DISPLAY CANVAS HELPER FUNCTIONS ---
+
 // 7. Animation Loop (Render the Scene)
 function animate() {
     requestAnimationFrame(animate);
@@ -589,13 +633,20 @@ function animate() {
     if (isFadingIn && modelToFadeIn) {
         let allMaterialsOpaque = true;
 
-    // Make the model gently bob when not being dragged
-    if (modelToFadeIn && !isDragging) {
-        // You can adjust 0.5/0.3 to change float speed
-        // You can adjust 0.03 to change the float amount
-        modelToFadeIn.rotation.x = DEFAULT_ROTATION_X + (Math.sin(elapsedTime * 0.5) * 0.03); 
-        modelToFadeIn.rotation.z = Math.sin(elapsedTime * 0.3) * 0.01;
-    }
+        // --- MODIFIED: Make the model gently bob when not being dragged OR FOCUSED ---
+        if (modelToFadeIn && !isDragging && !isCameraFocused) {
+            // You can adjust 0.5/0.3 to change float speed
+            // You can adjust 0.03 to change the float amount
+            modelToFadeIn.rotation.x = DEFAULT_ROTATION_X + (Math.sin(elapsedTime * 0.5) * 0.03); 
+            modelToFadeIn.rotation.z = Math.sin(elapsedTime * 0.3) * 0.01;
+        
+        } else if (modelToFadeIn) { 
+            // When focused or dragging, smoothly return to default non-bobbing rotation
+            modelToFadeIn.rotation.x = THREE.MathUtils.lerp(modelToFadeIn.rotation.x, DEFAULT_ROTATION_X, 0.1);
+            modelToFadeIn.rotation.z = THREE.MathUtils.lerp(modelToFadeIn.rotation.z, 0, 0.1);
+        }
+        // --- END MODIFIED BOBBING ---
+
 
         // 1. FADE-IN
         modelToFadeIn.traverse((child) => {
@@ -644,20 +695,48 @@ if (!isDragging && modelToFadeIn && rotationVelocityY !== 0) {
         }
     }
 
-    // --- NEW: Update camera position every frame based on radius ---
-    // This works for both the intro anim and the user wheel zoom
-    camera.position.y = currentRadius * Math.sin(angle);
-    camera.position.z = currentRadius * Math.cos(angle);
-    camera.lookAt(0, 0, 0); // Keep camera pointed at the center
-    // --- END NEW ---
+    // --- Check if camera has arrived at its destination ---
+    if (isCameraTransitioning) {
+        const distanceToTarget = camera.position.distanceTo(targetCameraPosition);
+        // If we are very close, stop the transition
+        if (distanceToTarget < 0.01) {
+            isCameraTransitioning = false;
+            // Optional: Snap to final position to be precise
+            camera.position.copy(targetCameraPosition);
+            lerpedLookAt.copy(targetLookAt);
+            lerpedCameraUp.copy(targetCameraUp);
+        }
+    }
+
+   // --- Camera Position Logic
+    if (isCameraFocused) {
+        // Targets are set by checkIntersections on click
+    } else {
+        // We are in default mode. Set targets *every frame*
+        // to account for wheel-based 'currentRadius' changes.
+        targetCameraPosition.set(
+            0,
+            currentRadius * Math.sin(angle),
+            currentRadius * Math.cos(angle)
+        );
+        targetLookAt.set(0, 0, 0);
+        targetCameraUp.set(0, 1, 0); // Reset "up" vector to world default
+    }
+    
+    // Always lerp to the current target position, lookAt point, and up vector
+    camera.position.lerp(targetCameraPosition, CAMERA_FOCUS_SPEED);
+    lerpedLookAt.lerp(targetLookAt, CAMERA_FOCUS_SPEED);
+    lerpedCameraUp.lerp(targetCameraUp, CAMERA_FOCUS_SPEED); //
+    
+    // Apply the "up" vector *before* calling lookAt
+    camera.up.copy(lerpedCameraUp); // 
+    camera.lookAt(lerpedLookAt);
+    // --- END REPLACED ---
 
     // --- Call Raycasting Logic ---
     if (modelToFadeIn) {
-        checkIntersections();
+        checkIntersections(false); // <-- MODIFIED: Pass false for hover check
     }
-    // -----------------------------
-
-    // --- REMOVED: controls.update() ---
 
     // Render via the EffectComposer
     composer.render();
@@ -666,8 +745,7 @@ if (!isDragging && modelToFadeIn && rotationVelocityY !== 0) {
 // --- Get Display Element from DOM ---
 descriptionDisplayElement = document.getElementById('description-display');
 
-// ---  Get GUI Display Host from DOM ---
-guiDisplayHost = document.getElementById('gui-display-host');
+// --- REMOVED: Get GUI Display Host from DOM ---
 
 // --- Fullscreen & Landscape Lock Logic ---
 const startOverlay = document.getElementById('start-overlay');
@@ -676,9 +754,11 @@ const startButton = document.getElementById('start-button');
 async function startExperience() {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     try {
-        await document.documentElement.requestFullscreen();
         if (isMobile /*&& screen.orientation && screen.orientation.lock*/) {
-            await screen.orientation.lock("landscape");
+            await document.documentElement.requestFullscreen();
+            if (screen.orientation && screen.orientation.lock) {
+                await screen.orientation.lock("landscape");
+            }
         }
     } catch (error) {
         console.warn("Could not enter fullscreen or lock orientation:", error);
