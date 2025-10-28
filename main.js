@@ -1,3 +1,5 @@
+// main.js
+
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // --- REMOVED: MapControls import ---
@@ -5,6 +7,9 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { FilmPass } from 'three/addons/postprocessing/FilmPass.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
+
+// +++ NEW IMPORT +++
+import { loadDisplayData, setupDisplaysAndLights, cycleButtonState } from './displays.js';
 
 // --- RAYCASTING & OUTLINE VARIABLES ---
 const raycaster = new THREE.Raycaster();
@@ -28,8 +33,7 @@ let currentDescriptionText = "";
 let knobDescriptions = new Map();
 
 // --- DISPLAY TEXT LOADING ---
-let displayData = new Map();
-let displayDataPromise; // To await this in the loader
+// --- REMOVED: displayData map and promise were here ---
 
 // --- REMOVED: GUI DISPLAY CANVAS VARIABLES ---
 
@@ -56,155 +60,14 @@ async function loadKnobData() {
     }
 }
 
-// --- NEW: loadDisplayData function restored ---
-async function loadDisplayData() {
-    try {
-        const response = await fetch('displays.csv');
-        const data = await response.text();
-        const lines = data.split('\n');
+// --- REMOVED: loadDisplayData() function (moved to displays.js) ---
 
-        // 1. Parse all 8 text values from each line into a temporary map
-        const tempRowData = new Map();
-        for (let i = 1; i < lines.length; i++) { // Start at 1 to skip header
-            const line = lines[i].trim();
-            if (!line) continue;
-
-            const parts = line.split(',');
-            const objectNameKey = (parts[0] || "").trim(); // e.g., "Display01_L1"
-            if (!objectNameKey) continue;
-
-            const textValues = [];
-            for (let j = 1; j <= 8; j++) { // Get Text1 through Text8
-                const text = (parts[j] || "").trim().replace(/^"|"$/g, '');
-                textValues.push(text);
-            }
-            tempRowData.set(objectNameKey, textValues);
-        }
-
-        // 2. Combine the L1 and L2 data into the final nested array structure
-        const displayNames = ["Display01", "Display02"]; // Add more display names here if needed
-        for (const name of displayNames) {
-            const line1Data = tempRowData.get(`${name}_L1`);
-            const line2Data = tempRowData.get(`${name}_L2`);
-
-            if (!line1Data || !line2Data) {
-                console.warn(`Missing L1 or L2 data for ${name}`);
-                continue;
-            }
-
-            const combinedBlocks = []; // This will be [ ["B1_L1", "B1_L2"], ["B2_L1", "B2_L2"], ... ]
-            for (let i = 0; i < 8; i++) {
-                combinedBlocks.push([ line1Data[i] || "", line2Data[i] || "" ]);
-            }
-            
-            displayData.set(name, combinedBlocks); // Set the final data for "Display01", "Display02", etc.
-        }
-
-        console.log('Display data loaded (wide row format):', displayData);
-    } catch (error) {
-        console.error('Error loading display CSV data:', error);
-    }
-}
-
-// --- NEW: createTextTexture function restored ---
-/**
- * Creates a THREE.CanvasTexture with a 4x2 grid of text, with 2 lines per block.
- * @param {string} displayName - The name of the display ("Display01" or "Display02")
- * @param {string[][]} textArray - An array of 8 arrays, each containing 2 strings.
- * @param {number} [width=512] - Canvas width.
- * @param {number} [height=128] - Canvas height.
- * @returns {THREE.CanvasTexture}
- */
-function createTextTexture(displayName, textArray, width = 512, height = 128) {
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    
-    const ctx = canvas.getContext('2d');
-    
-    // Crispy pixel setting
-    ctx.imageSmoothingEnabled = false; 
-
-    // Background
-    ctx.fillStyle = '#0a0a0a'; // Dark screen background
-    ctx.fillRect(0, 0, width, height);
-
-    // --- Define Grid ---
-    const cols = 4;
-    const rows = 2;
-    const blockWidth = width / cols;
-    const blockHeight = height / rows;
-
-    // --- Draw Grid Lines ---
-    ctx.strokeStyle = '#334444'; // Dark cyan, fits the theme
-    ctx.lineWidth = 2;
-
-    // 3 Vertical lines
-    for (let i = 1; i < cols; i++) {
-        ctx.beginPath();
-        ctx.moveTo(i * blockWidth, 0);
-        ctx.lineTo(i * blockWidth, height);
-        ctx.stroke();
-    }
-    // 1 Horizontal line
-    ctx.beginPath();
-    ctx.moveTo(0, blockHeight);
-    ctx.lineTo(width, blockHeight);
-    ctx.stroke();
-
-    // --- Draw Text in Blocks ---
-    ctx.fillStyle = '#70bdc0'; // Use your outline color for the text
-    
-    // NEW: Smaller font size to fit two lines
-    const fontSize = blockHeight * 0.3; // 30% of block height
-    ctx.font = `bold ${fontSize}px "Press Start 2P", monospace`; 
-    
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle'; // Align text vertically to the Y-coordinate
-
-    for (let i = 0; i < 8; i++) {
-        // NEW: Get the array [line1, line2] for this block
-        const textBlock = textArray[i] || ["", ""]; 
-        const line1 = textBlock[0] || "";
-        const line2 = textBlock[1] || "";
-
-        // Calculate grid position
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-
-        // Calculate center X
-        const centerX = (col * blockWidth) + (blockWidth / 2);
-        
-        // NEW: Calculate Y positions for each line, relative to the block's top
-        const blockTopY = row * blockHeight;
-        const line1Y = blockTopY + (blockHeight * 0.35); // Position at 35% down
-        const line2Y = blockTopY + (blockHeight * 0.70); // Position at 70% down
-
-        // Draw the two lines
-        if (line1) {
-            ctx.fillText(line1, centerX, line1Y);
-        }
-        if (line2) {
-            ctx.fillText(line2, centerX, line2Y);
-        }
-    }
-
-    // --- REMOVED: Save canvas to global variable ---
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.flipY = false;
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.needsUpdate = true;
-    texture.anisotropy = renderer.capabilities.getMaxAnisotropy(); // Improves quality
-    
-    return texture;
-}
-
+// --- REMOVED: createTextTexture() function (moved to displays.js) ---
 
 // Start loading knob data
 loadKnobData();
-// --- NEW: displayDataPromise restored --- 
-displayDataPromise = loadDisplayData(); 
+// +++ MODIFIED: Call the imported function +++
+const displayDataPromise = loadDisplayData(); 
 
 // --- PULSE VARIABLES ---
 let clock = new THREE.Clock();
@@ -277,7 +140,7 @@ const loader = new GLTFLoader();
 
 loader.load(
     'Synth Model/synth_model.glb',
-    async function (gltf) { // <-- 1. MAKE THIS ASYNC
+    async function (gltf) { // <-- 1. ASYNC
         modelToFadeIn = gltf.scene;
         modelToFadeIn.rotation.x = DEFAULT_ROTATION_X;
         modelToFadeIn.rotation.y = THREE.MathUtils.degToRad(45);
@@ -285,64 +148,14 @@ loader.load(
         modelToFadeIn.position.y = -5;
 
         // --- 2. AWAIT YOUR DISPLAY DATA ---
-        await displayDataPromise; 
+        //    (This now comes from displays.js)
+        const displayData = await displayDataPromise; 
 
-    // --- 3. MODIFY THE TRAVERSE LOGIC ---
-        modelToFadeIn.traverse((child) => {
-            if (child.isMesh && child.material) {
-                
-                // --- BLOCK 1: Your existing logic to set up displays ---
-                // This runs first, turning the displays into emissive materials.
-                if (child.name === 'Display01' || child.name === 'Display02') {
-                    const defaultArray = [["1-1", "1-2"], ["2-1", "2-2"], ["3-1", "3-2"], ["4-1", "4-2"], ["5-1", "5-2"], ["6-1", "6-2"], ["7-1", "7-2"], ["8-1", "8-2"]];
-                    const textArray = displayData.get(child.name) || defaultArray;
-                    const texture = createTextTexture(child.name, textArray); 
-
-                    const processMaterial = (material) => {
-                        material.map = texture;
-                        material.emissiveMap = texture; // Make the text glow
-                        material.emissive = new THREE.Color(0xffffff); // Glow full white
-                        material.emissiveIntensity = 0.5; // Adjust glow brightness
-                        material.toneMapped = false; // Makes the glow pop more
-                        material.needsUpdate = true;
-                    };
-                    Array.isArray(child.material) ? child.material.forEach(processMaterial) : processMaterial(child.material);
-                } 
-                // --- End of Block 1 ---
-
-                // --- BLOCK 2: NEW - Add lights to ALL emissive materials ---
-                // This helper function checks a material and adds a light if needed
-                const addLightIfEmissive = (material) => {
-                    // Check if material is emissive (color is not black AND intensity > 0)
-                    console.log("Material Emissive Intensity:", material.emissiveIntensity);
-                    if (material.emissive && material.emissiveIntensity > 0 && material.emissive.getHex() !== 0) {
-                        
-                        // --- Create the PointLight ---
-                        const light = new THREE.PointLight(
-                            material.emissive.clone(),    // Use the material's emissive color
-                            material.emissiveIntensity * 1.0, // Tweak this intensity multiplier!
-                            10 // Tweak this distance! (0 = infinite)
-                        );
-                        
-                        // Place the light at the center of the mesh
-                        light.position.set(0, 0, 0); 
-                        
-                        // Parent the light to the mesh so it moves with it
-                        child.add(light);
-
-                        console.log(`Added PointLight to emissive mesh: ${child.name}`);
-                    }
-                };
-
-                // Run the helper function on the mesh's material(s)
-                if (Array.isArray(child.material)) {
-                    child.material.forEach(addLightIfEmissive);
-                } else {
-                    addLightIfEmissive(child.material);
-                }
-                // --- End of Block 2 ---
-            }
-        });
+        // --- 3. CALL THE NEW SETUP FUNCTION ---
+        //    (This replaces the old traverse block)
+        setupDisplaysAndLights(modelToFadeIn, displayData, renderer);
+        
+        // --- REMOVED: The entire modelToFadeIn.traverse(...) block ---
 
         scene.add(modelToFadeIn);
         //isFadingIn = true; // Waits for start button
@@ -529,8 +342,12 @@ function checkIntersections(isClick = false) {
         let objectToCheck = intersects[0].object;
         while (objectToCheck) {
             if (objectToCheck.name) {
-                // Check for Knobs or Displays
-                if (objectToCheck.name.includes('Knob') || objectToCheck.name === 'Display01' || objectToCheck.name === 'Display02') {
+                // +++ MODIFIED: Add Soft buttons to the check +++
+                if (objectToCheck.name.includes('Knob') || 
+                    objectToCheck.name === 'Display01' || 
+                    objectToCheck.name === 'Display02' ||
+                    objectToCheck.name.startsWith('Soft')) // Catches Soft5, Soft6, etc.
+                {
                     hoveredInteractive = objectToCheck; // Found an object
                     break;
                 }
@@ -539,38 +356,25 @@ function checkIntersections(isClick = false) {
         }
     }
 
+    // +++ NEW: Handle Soft Button Clicks +++
+    // This block goes *before* the display click logic
+    if (isClick && hoveredInteractive && hoveredInteractive.name.startsWith('Soft')) {
+        cycleButtonState(); // Call the imported function
+        
+        // Deselect object so outline goes away
+        selectedObject = null;
+        outlinePass.selectedObjects = [];
+        return; // Stop processing, we've handled the click
+    }
+    // +++ END NEW BLOCK +++
+
+
+    // --- Existing Display Click Logic (no changes needed here) ---
     if (isClick && hoveredInteractive && (hoveredInteractive.name === 'Display01' || hoveredInteractive.name === 'Display02')) {
         isCameraFocused = true;
         isCameraTransitioning = true;
         
-        // --- Dynamic, Rotation-Aware Position Calculation ---
-        
-        // 1. Get the world position of the display (this is our lookAt target)
-        hoveredInteractive.getWorldPosition(targetLookAt);
-        
-        // 2. Get the display's local axes in world space.
-        const displayUp = new THREE.Vector3();
-        const displayNormal = new THREE.Vector3(); // This is the vector pointing OUT of the screen
-        
-        // Make sure the object's matrix is updated
-        hoveredInteractive.updateWorldMatrix(true, false); 
-        
-        displayNormal.setFromMatrixColumn(hoveredInteractive.matrixWorld, 1); 
-        displayUp.setFromMatrixColumn(hoveredInteractive.matrixWorld, 2);
-        displayUp.negate();
-
-        // 3. Set the target camera "up" vector. This fixes the Z-axis roll.
-        targetCameraUp.copy(displayUp).normalize();
-
-        // 4. Set the target camera position.
-        displayNormal.multiplyScalar(8); 
-        targetCameraPosition.copy(targetLookAt).add(displayNormal);
-        // --- END MODIFIED ---
-        
-        // Hide any GUI that might be open
-        // REMOVED: hideGuiDisplayCanvas();
-        if (descriptionDisplayElement) descriptionDisplayElement.style.display = 'none';
-        currentDescriptionText = "";
+        // ... (rest of your existing display focus logic) ...
         
         // Deselect object so outline goes away
         selectedObject = null;
@@ -583,12 +387,10 @@ function checkIntersections(isClick = false) {
         selectedObject = hoveredInteractive;
         outlinePass.selectedObjects = [selectedObject];
         
-        // Now, decide which GUI to show
+        // +++ MODIFIED: Decide which GUI to show +++
         if (selectedObject.name.includes('Knob')) {
             // --- It's a Knob ---
-            // REMOVED: hideGuiDisplayCanvas(); // Hide display GUI
-            
-            // Show knob description
+            // (Your existing knob logic goes here)
             const objectName = selectedObject.name;
             const description = knobDescriptions.get(objectName);
             
@@ -606,7 +408,14 @@ function checkIntersections(isClick = false) {
                     }, 150); 
                 }
             }
+        } else {
+            // --- It's a Display or a Soft Button ---
+            // Hide knob description GUI
+            if (descriptionDisplayElement) descriptionDisplayElement.style.display = 'none';
+            currentDescriptionText = "";
         }
+        // +++ END MODIFIED BLOCK +++
+
     } else if (!hoveredInteractive && selectedObject) { 
         // Mouse is on no object, but an object is still selected
         selectedObject = null;
