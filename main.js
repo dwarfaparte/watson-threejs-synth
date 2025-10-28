@@ -267,7 +267,7 @@ textureLoader.load(
 let ambientLight = new THREE.AmbientLight(0xffffff, PULSE_MIN_INTENSITY); 
 scene.add(ambientLight);
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 13);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
 directionalLight.position.set(5, 100, 20.5);
 scene.add(directionalLight);
 
@@ -287,13 +287,13 @@ loader.load(
         // --- 2. AWAIT YOUR DISPLAY DATA ---
         await displayDataPromise; 
 
-        // --- 3. MODIFY THE TRAVERSE LOGIC ---
+    // --- 3. MODIFY THE TRAVERSE LOGIC ---
         modelToFadeIn.traverse((child) => {
             if (child.isMesh && child.material) {
                 
-                // --- NEW: Handle Displays Separately ---
+                // --- BLOCK 1: Your existing logic to set up displays ---
+                // This runs first, turning the displays into emissive materials.
                 if (child.name === 'Display01' || child.name === 'Display02') {
-                    // Get text array from CSV, or provide a default 8-block array
                     const defaultArray = [["1-1", "1-2"], ["2-1", "2-2"], ["3-1", "3-2"], ["4-1", "4-2"], ["5-1", "5-2"], ["6-1", "6-2"], ["7-1", "7-2"], ["8-1", "8-2"]];
                     const textArray = displayData.get(child.name) || defaultArray;
                     const texture = createTextTexture(child.name, textArray); 
@@ -303,15 +303,43 @@ loader.load(
                         material.emissiveMap = texture; // Make the text glow
                         material.emissive = new THREE.Color(0xffffff); // Glow full white
                         material.emissiveIntensity = 0.5; // Adjust glow brightness
-                        material.toneMapped = false; // Makes the glow pop more (unaffected by film pass tone mapping)
-                        
-                        // --- REMOVED opacity/transparent lines ---
+                        material.toneMapped = false; // Makes the glow pop more
                         material.needsUpdate = true;
                     };
                     Array.isArray(child.material) ? child.material.forEach(processMaterial) : processMaterial(child.material);
-
                 } 
-                // --- REMOVED else block that made other parts transparent ---
+                // --- End of Block 1 ---
+
+                // --- BLOCK 2: NEW - Add lights to ALL emissive materials ---
+                // This helper function checks a material and adds a light if needed
+                const addLightIfEmissive = (material) => {
+                    // Check if material is emissive (color is not black AND intensity > 0)
+                    if (material.emissive && material.emissiveIntensity > 0 && material.emissive.getHex() !== 0) {
+                        
+                        // --- Create the PointLight ---
+                        const light = new THREE.PointLight(
+                            material.emissive.clone(),    // Use the material's emissive color
+                            material.emissiveIntensity * 1.0, // Tweak this intensity multiplier!
+                            10 // Tweak this distance! (0 = infinite)
+                        );
+                        
+                        // Place the light at the center of the mesh
+                        light.position.set(0, 0, 0); 
+                        
+                        // Parent the light to the mesh so it moves with it
+                        child.add(light);
+
+                        console.log(`Added PointLight to emissive mesh: ${child.name}`);
+                    }
+                };
+
+                // Run the helper function on the mesh's material(s)
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(addLightIfEmissive);
+                } else {
+                    addLightIfEmissive(child.material);
+                }
+                // --- End of Block 2 ---
             }
         });
 
