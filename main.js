@@ -531,7 +531,7 @@ function checkIntersections(isClick = false) {
                 // Check for Knobs or Displays
                 if (objectToCheck.name.includes ('Knob') 
                 || objectToCheck.name.includes ('Display') 
-                || objectToCheck.name.includes ('Soft')) {
+                || objectToCheck.name.startsWith ('Soft')) {
                     hoveredInteractive = objectToCheck; // Found an object
                     break;
                 }
@@ -578,6 +578,50 @@ function checkIntersections(isClick = false) {
         outlinePass.selectedObjects = [];
         return; // Stop processing, we've handled the click
     }
+else if (isClick && hoveredInteractive && hoveredInteractive.name.startsWith('Soft')) {
+    
+    // --- THIS IS THE FIX ---
+    // The 'hoveredInteractive' is the child mesh that was clicked (e.g., "Soft_Casing").
+    // We need to get its PARENT group (e.g., "Soft_Button_01")
+    // and traverse *its* children to find all siblings (like "Soft_Light").
+    const parentObject = hoveredInteractive.parent;
+    if (!parentObject) return; // Safety check in case object has no parent
+    // --- END FIX ---
+
+    // Traverse all children of the PARENT object
+    parentObject.traverse((child) => { // <-- We are now traversing the PARENT
+        
+        // Check if the child is a mesh and has a material
+        if (child.isMesh && child.material) {
+            
+            // Helper function to process a single material
+            const toggleMaterial = (material) => {
+                // Check if the material has an emissive property
+                if (material.emissiveIntensity !== undefined) {
+                    
+                    // Toggle logic: If it's high (> 1.5), set it low (0.1). Otherwise, set it high (3).
+                    if (material.emissiveIntensity > 1.5) {
+                        material.emissiveIntensity = 0.1;
+                    } else {
+                        material.emissiveIntensity = 3;
+                    }
+                    
+                    material.needsUpdate = true; // Tell three.js to update
+                }
+            };
+
+            // Handle both single and multi-materials
+            if (Array.isArray(child.material)) {
+                child.material.forEach(toggleMaterial);
+            } else {
+                toggleMaterial(child.material);
+            }
+        }
+    });
+
+    // Prevent any other click logic (like GUI popups) from running
+    return; 
+}
 
     // --- STICKY LOGIC FOR ALL GUI ---
     if (hoveredInteractive && hoveredInteractive !== selectedObject) {
