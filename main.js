@@ -529,7 +529,9 @@ function checkIntersections(isClick = false) {
         while (objectToCheck) {
             if (objectToCheck.name) {
                 // Check for Knobs or Displays
-                if (objectToCheck.name.includes('Knob') || objectToCheck.name === 'Display01' || objectToCheck.name === 'Display02') {
+                if (objectToCheck.name.includes ('Knob') 
+                || objectToCheck.name.includes ('Display') 
+                || objectToCheck.name.includes ('Soft')) {
                     hoveredInteractive = objectToCheck; // Found an object
                     break;
                 }
