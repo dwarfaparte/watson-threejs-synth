@@ -580,33 +580,40 @@ function checkIntersections(isClick = false) {
     }
 else if (isClick && hoveredInteractive && hoveredInteractive.name.startsWith('Soft')) {
     
-    // --- THIS IS THE FIX ---
-    // The 'hoveredInteractive' is the child mesh that was clicked (e.g., "Soft_Casing").
-    // We need to get its PARENT group (e.g., "Soft_Button_01")
-    // and traverse *its* children to find all siblings (like "Soft_Light").
+    // 1. Get the name and parent of the clicked object
+    const clickedName = hoveredInteractive.name; // e.g., "Soft8_1"
     const parentObject = hoveredInteractive.parent;
-    if (!parentObject) return; // Safety check in case object has no parent
-    // --- END FIX ---
+    if (!parentObject) return; // Safety check
 
-    // Traverse all children of the PARENT object
-    parentObject.traverse((child) => { // <-- We are now traversing the PARENT
+    // 2. Find the "group prefix" by splitting at the *last* underscore.
+    const lastUnderscoreIndex = clickedName.lastIndexOf('_');
+    if (lastUnderscoreIndex === -1) {
+        console.warn(`Soft object ${clickedName} has no underscore for grouping.`);
+        return; // Can't find group
+    }
+    
+    // The groupPrefix is everything *before* the last underscore, e.g., "Soft8"
+    const groupPrefix = clickedName.substring(0, lastUnderscoreIndex); 
+    
+    // 3. Traverse the PARENT to find all siblings in the group
+    parentObject.traverse((child) => {
         
-        // Check if the child is a mesh and has a material
-        if (child.isMesh && child.material) {
+        // 4. Check if this child is a mesh, BELONGS to the same group, and has a material
+        if (child.isMesh && child.name.startsWith(groupPrefix) && child.material) {
             
-            // Helper function to process a single material
+            // 5. Found a related part (e.g., "Soft8_2", "Soft8_3"). Toggle its material.
             const toggleMaterial = (material) => {
-                // Check if the material has an emissive property
-                if (material.emissiveIntensity !== undefined) {
+                // Check if it's actually an emissive material
+                // (Check for intensity > 0 to avoid toggling non-emissive materials)
+                if (material.emissiveIntensity !== undefined && material.emissiveIntensity > 0) { 
                     
-                    // Toggle logic: If it's high (> 1.5), set it low (0.1). Otherwise, set it high (3).
+                    // Toggle logic
                     if (material.emissiveIntensity > 1.5) {
                         material.emissiveIntensity = 0.1;
                     } else {
                         material.emissiveIntensity = 3;
                     }
-                    
-                    material.needsUpdate = true; // Tell three.js to update
+                    material.needsUpdate = true;
                 }
             };
 
@@ -619,7 +626,7 @@ else if (isClick && hoveredInteractive && hoveredInteractive.name.startsWith('So
         }
     });
 
-    // Prevent any other click logic (like GUI popups) from running
+    // Prevent any other click logic
     return; 
 }
 
@@ -628,28 +635,33 @@ else if (isClick && hoveredInteractive && hoveredInteractive.name.startsWith('So
         selectedObject = hoveredInteractive;
         outlinePass.selectedObjects = [selectedObject];
         
-        // Now, decide which GUI to show
-        if (selectedObject.name.includes('Knob')) {
-            // --- It's a Knob ---
-            // REMOVED: hideGuiDisplayCanvas(); // Hide display GUI
-            
-            // Show knob description
-            const objectName = selectedObject.name;
-            const description = knobDescriptions.get(objectName);
-            
-            if (description && description !== currentDescriptionText) {
-                if (descriptionDisplayElement) {
-                    descriptionDisplayElement.style.display = 'block'; 
-                    descriptionDisplayElement.innerHTML = description;
-                    currentDescriptionText = description; 
-                    descriptionDisplayElement.style.transform = 'scale(1.1)'; 
+        const objectName = selectedObject.name;
+        const description = knobDescriptions.get(objectName);
+        let textToShow = ""; // The text we will ultimately display
 
-                    setTimeout(() => {
-                        if (descriptionDisplayElement) {
-                            descriptionDisplayElement.style.transform = 'scale(1)'; 
-                        }
-                    }, 150); 
-                }
+        if (description) {
+            // Case 1: We found a real description in the CSV (for Knobs)
+            textToShow = description;
+        } else {
+            // Case 2: No CSV entry, so just show the object's name for debugging
+            // This will now show "Display01", "Soft_Casing_01", "Soft_Light_01", etc.
+            textToShow = objectName; 
+        }
+
+        // Now, display whatever text we decided on
+        if (textToShow && textToShow !== currentDescriptionText) {
+            if (descriptionDisplayElement) {
+                descriptionDisplayElement.style.display = 'block'; 
+                descriptionDisplayElement.innerHTML = textToShow;
+                currentDescriptionText = textToShow; 
+                
+                // Animate the popup
+                descriptionDisplayElement.style.transform = 'scale(1.1)'; 
+                setTimeout(() => {
+                    if (descriptionDisplayElement) {
+                        descriptionDisplayElement.style.transform = 'scale(1)'; 
+                    }
+                }, 150); 
             }
         }
     } else if (!hoveredInteractive && selectedObject) { 
