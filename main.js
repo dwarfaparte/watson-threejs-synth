@@ -314,7 +314,6 @@ loader.load(
                 // This helper function checks a material and adds a light if needed
                 const addLightIfEmissive = (material) => {
                     // Check if material is emissive (color is not black AND intensity > 0)
-                    console.log("Material Emissive Intensity:", material.emissiveIntensity);
                     if (material.emissive && material.emissiveIntensity > 0 && material.emissive.getHex() !== 0) {
                         
                         // --- Create the PointLight ---
